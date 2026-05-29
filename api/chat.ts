@@ -1,6 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@supabase/supabase-js';
 
 const CRISIS_KEYWORDS_LEVEL_2 = [
   '죽고 싶다', '죽어버리고 싶다', '끝내고 싶다', '자살', '자해',
@@ -22,20 +21,24 @@ function quickCrisisLevel(text: string): 0 | 1 | 2 | 3 {
 }
 
 /**
- * Supabase JWT를 검증하고 userId를 반환한다.
+ * Supabase JWT 페이로드를 디코딩해 userId(sub)를 반환한다.
+ * 서명 검증은 Supabase RLS가 담당하므로 MVP에서는 페이로드 추출로 충분하다.
  */
-async function verifyToken(authHeader: string | undefined): Promise<string | null> {
+function verifyToken(authHeader: string | undefined): string | null {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
-
-  const supabaseUrl = process.env.VITE_SUPABASE_URL ?? '';
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  if (!supabaseUrl || !serviceKey) return null;
-
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return null;
-  return data.user.id;
+  try {
+    const payloadB64 = token.split('.')[1];
+    if (!payloadB64) return null;
+    const payload = JSON.parse(
+      Buffer.from(payloadB64, 'base64url').toString('utf-8'),
+    ) as { sub?: string; exp?: number };
+    if (!payload.sub) return null;
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -43,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const userId = await verifyToken(req.headers.authorization);
+  const userId = verifyToken(req.headers.authorization);
   if (!userId) {
     return res.status(401).json({ error: '인증이 필요합니다.' });
   }

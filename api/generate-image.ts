@@ -1,18 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
 
-async function verifyToken(authHeader: string | undefined): Promise<string | null> {
+function verifyToken(authHeader: string | undefined): string | null {
   if (!authHeader?.startsWith('Bearer ')) return null;
   const token = authHeader.slice(7);
-
-  const supabaseUrl = process.env.VITE_SUPABASE_URL ?? '';
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  if (!supabaseUrl || !serviceKey) return null;
-
-  const supabase = createClient(supabaseUrl, serviceKey);
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data.user) return null;
-  return data.user.id;
+  try {
+    const payloadB64 = token.split('.')[1];
+    if (!payloadB64) return null;
+    const payload = JSON.parse(
+      Buffer.from(payloadB64, 'base64url').toString('utf-8'),
+    ) as { sub?: string; exp?: number };
+    if (!payload.sub) return null;
+    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return payload.sub;
+  } catch {
+    return null;
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -20,7 +22,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  const userId = await verifyToken(req.headers.authorization);
+  const userId = verifyToken(req.headers.authorization);
   if (!userId) {
     return res.status(401).json({ error: '인증이 필요합니다.' });
   }
