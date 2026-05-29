@@ -1,25 +1,51 @@
-import { createRootRoute, Link, Outlet } from '@tanstack/react-router';
+import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/router-devtools';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { Toaster } from '@/components/ui/sonner';
+import { useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useGriefStore } from '@/stores/grief-store';
 
 export const Route = createRootRoute({
   component: RootLayout,
 });
 
 function RootLayout() {
-  return (
-    <div className="min-h-screen flex flex-col">
-      <header className="border-b">
-        <nav className="container mx-auto flex h-14 items-center gap-6 px-4">
-          <Link to="/" className="font-semibold">
-            Home
-          </Link>
-        </nav>
-      </header>
+  const navigate = useNavigate();
+  const setUserId = useGriefStore((s) => s.setUserId);
 
-      <main className="container mx-auto flex-1 px-4 py-8">
-        <Outlet />
-      </main>
+  useEffect(() => {
+    const isCallbackRoute = window.location.pathname === '/auth/callback';
+
+    // 초기 세션 확인
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+      } else if (!isCallbackRoute) {
+        setUserId(null);
+        void navigate({ to: '/auth' });
+      }
+    });
+
+    // 인증 상태 변화 구독
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+      } else if (!isCallbackRoute) {
+        setUserId(null);
+        void navigate({ to: '/auth' });
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate, setUserId]);
+
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <Outlet />
+      <Toaster position="top-center" richColors />
 
       {import.meta.env.DEV && (
         <>

@@ -54,8 +54,11 @@ Planner의 결과를 받은 뒤, **반드시** 사용자에게 spec 요약을 �
 
 #### 3-3. Verdict 판정 (1차)
 - 두 보고서를 Read 도구로 직접 읽는다 (서브에이전트의 요약을 믿지 말고 파일에서 Verdict 라인 확인).
-- **하나라도 FAIL** → `N = N + 1` 로 증가시키고 3-1로 돌아간다 (N > 3이면 단계 5).
 - **둘 다 PASS** → 단계 3-4(E2E)로.
+- **하나라도 FAIL** → 사용자에게 iter N의 실패 항목을 요약해 보여주고, AskUserQuestion으로 묻는다:
+  - "iter N 결과: FAIL. 다음 iteration을 진행할까요?"
+  - 옵션: "예, iter N+1 진행" → `N = N + 1` 후 3-1로 / "아니오, 여기서 중단" → 단계 5로
+  - (N > 3이면 AskUserQuestion 없이 단계 5로)
 
 #### 3-4. E2E 게이트 (조건부)
 - `docs/specs/<slug>/spec.md` 의 "10. E2E 검증 필요 여부" 섹션을 Read로 확인.
@@ -67,8 +70,10 @@ Planner의 결과를 받은 뒤, **반드시** 사용자에게 spec 요약을 �
 #### 3-5. Verdict 판정 (2차, E2E 포함)
 - `e2e-iter-N.md` 의 Verdict 라인 확인.
 - **PASS 또는 SKIP** → 단계 4(종료)로.
-- **FAIL** → `N = N + 1` 로 증가시키고 3-1로 돌아간다 (N > 3이면 단계 5).
-  - 다음 iteration의 Developer에게는 review/test 보고서뿐 아니라 **e2e 보고서 경로도 전달**해야 한다.
+- **FAIL** → 사용자에게 iter N의 E2E 실패 항목을 요약해 보여주고, AskUserQuestion으로 묻는다:
+  - "iter N E2E 결과: FAIL. 다음 iteration을 진행할까요?"
+  - 옵션: "예, iter N+1 진행" → `N = N + 1` 후 3-1로 (다음 Developer에게 e2e 보고서 경로도 전달) / "아니오, 여기서 중단" → 단계 5로
+  - (N > 3이면 AskUserQuestion 없이 단계 5로)
 
 ### 4. 정상 종료
 
